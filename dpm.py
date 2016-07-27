@@ -2,7 +2,7 @@
 # @Author: Koth Chen
 # @Date:   2016-07-26 13:48:32
 # @Last Modified by:   Koth Chen
-# @Last Modified time: 2016-07-26 23:35:34
+# @Last Modified time: 2016-07-27 11:37:06
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -28,6 +28,8 @@ tf.app.flags.DEFINE_integer("max_query_len", 20, "max num of tokens per query")
 tf.app.flags.DEFINE_integer("window_size", 5, "window size to do convolution")
 tf.app.flags.DEFINE_integer("embedding_size", 100, "embedding size")
 tf.app.flags.DEFINE_integer("num_filters", 100, "num of filters")
+tf.app.flags.DEFINE_integer("batch_size", 100, "num example per mini batch")
+tf.app.flags.DEFINE_integer("train_steps", 50000, "trainning steps")
 
 
 def do_load_data(path):
@@ -172,7 +174,7 @@ def read_csv(batch_size, file_name):
 
 def test_evaluate(sess, tmodel, inp, tp, tX, tY):
   totalEqual = 0
-  batchSize = 100
+  batchSize = FLAGS.batch_size
   numBatch = int(tX.shape[0] / batchSize)
   for i in range(numBatch):
     feed_dict = {inp: tX[i * batchSize:(i + 1) * batchSize],
@@ -183,7 +185,7 @@ def test_evaluate(sess, tmodel, inp, tp, tX, tY):
 
 def inputs(path):
 
-  whole = read_csv(100, path)
+  whole = read_csv(FLAGS.batch_size, path)
   label = whole[-1]
 
   # convert class names to a 0 based class index.
@@ -201,15 +203,15 @@ def train(total_loss):
 
 def main(unused_argv):
   curdir = os.path.dirname(os.path.realpath(__file__))
-  traindir = tf.app.flags.FLAGS.train_data_path
-  if not traindir.startswith("/"):
-    traindir = curdir + "/" + traindir
+  trainDataPath = tf.app.flags.FLAGS.train_data_path
+  if not trainDataPath.startswith("/"):
+    trainDataPath = curdir + "/" + trainDataPath
   graph = tf.Graph()
   with graph.as_default():
     model = Model(FLAGS.window_size, FLAGS.embedding_size, FLAGS.num_filters,
                   tf.app.flags.FLAGS.word2vec_path)
-    print("train path:", traindir)
-    X, Y = inputs(traindir)
+    print("train data path:", trainDataPath)
+    X, Y = inputs(trainDataPath)
     tX, tY = do_load_data(tf.app.flags.FLAGS.test_data_path)
     total_loss = model.loss(X, Y)
     train_op = train(total_loss)
@@ -217,7 +219,7 @@ def main(unused_argv):
     sv = tf.train.Supervisor(graph=graph, logdir=FLAGS.log_dir)
     with sv.managed_session(master='') as sess:
       # actual training loop
-      training_steps = 50000
+      training_steps = FLAGS.train_steps
       for step in range(training_steps):
         if sv.should_stop():
           break
@@ -231,6 +233,7 @@ def main(unused_argv):
         except KeyboardInterrupt, e:
           sv.saver.save(sess, FLAGS.log_dir + '/model', global_step=step + 1)
           raise e
+      sv.saver.save(sess, FLAGS.log_dir + '/finnal-model')
       sess.close()
 
 
